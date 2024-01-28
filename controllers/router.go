@@ -13,9 +13,10 @@ func (server *Server) InitRoutes() {
 		handlers.AllowedOrigins([]string{"*"}),
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "PATCH", "OPTIONS"}),
 		handlers.AllowedHeaders([]string{"Content-Type"}),
+		handlers.AllowCredentials(),
 	))
 	server.Router.HandleFunc("/api/user", server.CreateUser).Methods("POST", "OPTIONS")
-	server.Router.HandleFunc("/api/user/{id}", server.GetUser).Methods("GET")
+	server.Router.HandleFunc("/api/user", server.GetUser).Methods("GET", "OPTIONS")
 	server.Router.HandleFunc("/api/user/{id}", server.UpdateUser).Methods("PUT")
 	server.Router.HandleFunc("/api/order", server.CreateOrder).Methods("POST")
 	server.Router.HandleFunc("/api/order/{id}", server.UpdateOrder).Methods("PATCH")

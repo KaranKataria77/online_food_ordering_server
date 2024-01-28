@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/gorilla/mux"
@@ -44,8 +43,4 @@ func (server *Server) Init() {
 	fmt.Println("MongoDB Connection successed")
 
 	server.database = client.Database(dbName)
-}
-
-func (server *Server) enableCORS(w *http.ResponseWriter) {
-	(*w).Header().Set("Access-Control-Allow-Origin", "*")
 }
