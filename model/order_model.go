@@ -7,9 +7,7 @@ import (
 
 type Order struct {
 	ID               primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
-	UserId           primitive.ObjectID `json:"userId" validate:"required"" bson:"users,omitempty"`
-	FoodItems        []string           `json:"foodItems" validate:"required"`
-	TotalValue       string             `json:"totalValue" validate:"required"`
+	CartId           primitive.ObjectID `json:"cartId" validate:"required"" bson:"cartId,omitempty"`
 	Payment          primitive.ObjectID `json:"payment" bson:"payment"`
 	IsOrderDelivered bool               `json:"isOrderDelivered"`
 	IsOrderCancelled bool               `json:"isOrderCancelled"`

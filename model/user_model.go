@@ -13,6 +13,7 @@ type User struct {
 	Address   string               `json:"address"`
 	Location  [2]float64           `json:"location"`
 	Orders    []primitive.ObjectID `json:"orders" bson:"orders"`
+	Cart      []primitive.ObjectID `json:"cart" bson:"cart"`
 }
 
 func (user *User) Validate() error {

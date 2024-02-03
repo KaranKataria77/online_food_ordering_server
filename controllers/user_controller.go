@@ -22,29 +22,29 @@ var ErrUserNotFound = errors.New("user not found")
 var secretKey = []byte(os.Getenv("JWT_PRIVATE_KEY"))
 
 func (server *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/x-www-form-urlencode")
+	// w.Header().Set("Content-Type", "application/x-www-form-urlencode")
 	fmt.Println("Create user route called")
+	w.Header().Set("Content-Type", "application/json")
+
 	collection = server.database.Collection("users")
 
 	var user model.User
 	_ = json.NewDecoder(r.Body).Decode(&user)
 	err := user.Validate()
-	if err != nil {
-		log.Panic("User data not valid ", err)
-		return
-	}
-	jwtkey, err := createJWT(user.ID.Hex())
-	if err != nil {
-		fmt.Println("Error in createJWT", err)
-	}
-	setCookie(&w, jwtkey)
-	fmt.Println("key is ", jwtkey)
+
 	if err != nil {
 		errorResponse := map[string]string{"error": err.Error()}
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(errorResponse)
 	} else {
-		insertOneUser(user)
+		userId := insertOneUser(user)
+		jwtkey, err := createJWT(userId)
+		fmt.Println("User Id after creation ", userId)
+		if err != nil {
+			fmt.Println("Error in createJWT", err)
+		}
+		setCookie(&w, jwtkey)
+		fmt.Println("key is ", jwtkey)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"user":      user,
 			"isSuccess": true,
@@ -56,9 +56,11 @@ func (server *Server) GetUser(w http.ResponseWriter, r *http.Request) {
 	collection = server.database.Collection("users")
 	// vars := mux.Vars(r)
 	// id := vars["id"]
-	token, cokkieErr := readCookie(&w, r)
+	token, cokkieErr := readCookie(r)
+	fmt.Println("Reading token from cookies")
 	if cokkieErr != nil {
-		errorResponse := map[string]string{"error": "Unauthosized user"}
+		fmt.Println("Error reading in cookies ", cokkieErr)
+		errorResponse := map[string]string{"error": "Unauthorized user"}
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(errorResponse)
 		return
@@ -136,13 +138,15 @@ func getUserByID(userId string, user *model.User) error {
 	}
 	return nil
 }
-func insertOneUser(user model.User) {
+func insertOneUser(user model.User) string {
 	fmt.Println("User collection created")
 	inserted, err := collection.InsertOne(context.Background(), user)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("One movie inserted ID ", inserted.InsertedID)
+
+	fmt.Println("One user inserted ID ", inserted.InsertedID)
+	return inserted.InsertedID.(primitive.ObjectID).Hex()
 }
 
 func createJWT(id string) (string, error) {
@@ -184,8 +188,9 @@ func verifyToken(tokenString string) (string, error) {
 }
 
 func setCookie(w *http.ResponseWriter, token string) {
+	fmt.Println("Setting cookies")
 	cookie := http.Cookie{
-		Name:     "access_token",
+		Name:     "user_token",
 		Value:    token,
 		HttpOnly: true, // Set the cookie as HTTP-only for security purpose
 		Expires:  time.Now().Add(24 * time.Hour),
@@ -193,11 +198,27 @@ func setCookie(w *http.ResponseWriter, token string) {
 	http.SetCookie(*w, &cookie)
 }
 
-func readCookie(w *http.ResponseWriter, r *http.Request) (string, error) {
-	cookie, err := r.Cookie("access_token")
+func readCookie(r *http.Request) (string, error) {
+	cookie, err := r.Cookie("user_token")
 	if err != nil {
 		return "", err
 	}
 	fmt.Println("Access Token:", cookie.Value)
 	return cookie.Value, nil
+}
+
+func getUserIdFromToken(r *http.Request) (string, error) {
+	token, cokkieErr := readCookie(r)
+	fmt.Println("Reading token from cookies")
+	if cokkieErr != nil {
+		fmt.Println("Error reading in cookies ", cokkieErr)
+		errorResponse := errors.New("Unauthorized User")
+		return "", errorResponse
+	}
+	id, tokenErr := verifyToken(token)
+	if tokenErr != nil {
+		fmt.Println("Invalid Token ", tokenErr)
+		return "", tokenErr
+	}
+	return id, nil
 }
