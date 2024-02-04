@@ -43,4 +43,5 @@ func (server *Server) Init() {
 	fmt.Println("MongoDB Connection successed")
 
 	server.database = client.Database(dbName)
+	server.initUserCollection()
 }

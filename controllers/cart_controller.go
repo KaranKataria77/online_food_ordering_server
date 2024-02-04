@@ -9,15 +9,14 @@ import (
 	"net/http"
 	"online_food_ordering/model"
 
-	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type CartUpdate struct {
-	FoodItems  []string `json:"foodItems"`
-	TotalValue string   `json:"totalValue"`
+	FoodItems  []string `json:"foodItems" bson:"foodItems"`
+	TotalValue int64    `json:"totalValue" bson:"totalValue"`
 }
 
 var ErrCartNotFound = errors.New("Cart not found")
@@ -77,10 +76,14 @@ func (server *Server) DeactivateCart(w http.ResponseWriter, r *http.Request) {
 }
 func (server *Server) UpdateCart(w http.ResponseWriter, r *http.Request) {
 	// server.enableCORS(&w)
-	w.Header().Set("Allow-Control-Allow-Methods", "PATCH")
 	collection = server.database.Collection("carts")
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id, er := getUserIdFromToken(r)
+	if er != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": er,
+		})
+	}
 	var cart CartUpdate
 	_ = json.NewDecoder(r.Body).Decode(&cart)
 	err := updateCartByID(id, &cart)
@@ -143,9 +146,9 @@ func getCartByID(userId string, cart *model.Cart) error {
 	return nil
 }
 
-func updateCartByID(cartId string, order *CartUpdate) error {
-	id, _ := primitive.ObjectIDFromHex(cartId)
-	filter := bson.D{{Key: "_id", Value: id}}
+func updateCartByID(userId string, order *CartUpdate) error {
+	id, _ := primitive.ObjectIDFromHex(userId)
+	filter := bson.D{{Key: "userId", Value: id}, {Key: "isCartActive", Value: true}}
 	update := bson.D{{Key: "$set", Value: bson.D{{"foodItems", order.FoodItems}, {"totalValue", order.TotalValue}}}}
 
 	result, err := collection.UpdateOne(context.Background(), filter, update)

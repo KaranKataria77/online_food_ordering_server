@@ -16,10 +16,47 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 var ErrUserNotFound = errors.New("user not found")
 var secretKey = []byte(os.Getenv("JWT_PRIVATE_KEY"))
+
+type LoginUser struct {
+	Email     string `json:"email" validate:"required,email"`
+	Mobile_No string `json:"mobile_no"`
+}
+
+func collectionExists(ctx context.Context, db *mongo.Database, collectionName string) (bool, error) {
+	// ListCollections returns a cursor, and we can use the Next method to check if there are any collections
+	cursor, err := db.ListCollections(ctx, bson.M{"name": collectionName})
+	if err != nil {
+		return false, err
+	}
+	defer cursor.Close(ctx)
+
+	// Attempt to retrieve the next result from the cursor
+	return cursor.Next(ctx), nil
+}
+
+func (server *Server) initUserCollection() {
+	isExist, err := collectionExists(context.Background(), server.database, "users")
+	if err != nil {
+		log.Panic("Error while reading users collections")
+	}
+	if !isExist {
+		collection = server.database.Collection("users")
+		indexOptions := options.Index().SetUnique(true)
+		index := mongo.IndexModel{
+			Keys:    bson.M{"email": 1},
+			Options: indexOptions,
+		}
+		_, err = collection.Indexes().CreateOne(context.TODO(), index)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+}
 
 func (server *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 	// w.Header().Set("Content-Type", "application/x-www-form-urlencode")
@@ -52,10 +89,25 @@ func (server *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (server *Server) UserLogin(w http.ResponseWriter, r *http.Request) {
+	var user LoginUser
+	collection = server.database.Collection("users")
+	_ = json.NewDecoder(r.Body).Decode(&user)
+	loggedInUser, err := checkLoginUser(&user)
+	userMap, _ := loggedInUser.(map[string]interface{})
+	userField, _ := userMap["user"].(model.User)
+
+	fmt.Println("User Logged in is ", userField.ID)
+	jwtkey, err := createJWT(userField.ID.Hex())
+	if err != nil {
+		fmt.Println("Error in createJWT", err)
+	}
+	setCookie(&w, jwtkey)
+	json.NewEncoder(w).Encode(loggedInUser)
+}
+
 func (server *Server) GetUser(w http.ResponseWriter, r *http.Request) {
 	collection = server.database.Collection("users")
-	// vars := mux.Vars(r)
-	// id := vars["id"]
 	token, cokkieErr := readCookie(r)
 	fmt.Println("Reading token from cookies")
 	if cokkieErr != nil {
@@ -137,6 +189,18 @@ func getUserByID(userId string, user *model.User) error {
 		return err
 	}
 	return nil
+}
+func checkLoginUser(user *LoginUser) (interface{}, error) {
+	filter := bson.D{{"email", user.Email}, {"mobile_no", user.Mobile_No}}
+
+	var loggedInUser model.User
+	err := collection.FindOne(context.Background(), filter).Decode(&loggedInUser)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return map[string]interface{}{"message": "no user found"}, ErrUserNotFound
+		}
+	}
+	return map[string]interface{}{"user": loggedInUser}, nil
 }
 func insertOneUser(user model.User) string {
 	fmt.Println("User collection created")

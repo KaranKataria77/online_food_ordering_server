@@ -8,8 +8,8 @@ import (
 type Cart struct {
 	ID           primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
 	UserId       primitive.ObjectID `json:"userId" validate:"required" bson:"userId,omitempty"`
-	FoodItems    []string           `json:"foodItems" validate:"required"`
-	TotalValue   string             `json:"totalValue" validate:"required"`
+	FoodItems    []string           `json:"foodItems" validate:"required" bson:"foodItems,omitempty"`
+	TotalValue   int64              `json:"totalValue" validate:"required" bson:"totalValue,omitempty"`
 	IsCartActive bool               `json:"isCartActive" bson:"isCartActive,omitempty"`
 }
 
