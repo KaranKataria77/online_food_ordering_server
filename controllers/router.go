@@ -16,9 +16,8 @@ func (server *Server) InitRoutes() {
 		handlers.AllowCredentials(),
 	))
 	// user
-	server.Router.HandleFunc("/api/user", server.CreateUser).Methods("POST", "OPTIONS")
-	server.Router.HandleFunc("/api/user", server.GetUser).Methods("GET", "OPTIONS")
-	server.Router.HandleFunc("/api/user/{id}", server.UpdateUser).Methods("PUT")
+	server.Router.HandleFunc("/api/user/", server.CreateUser).Methods("POST", "OPTIONS")
+	server.Router.HandleFunc("/api/user/", server.GetUser).Methods("GET", "OPTIONS")
 	server.Router.HandleFunc("/api/user-login/", server.UserLogin).Methods("POST", "OPTIONS")
 	// cart
 	server.Router.HandleFunc("/api/cart/", server.GetCart).Methods("GET")

@@ -61,7 +61,7 @@ func (server *Server) initUserCollection() {
 func (server *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 	// w.Header().Set("Content-Type", "application/x-www-form-urlencode")
 	fmt.Println("Create user route called")
-	w.Header().Set("Content-Type", "application/json")
+	// w.Header().Set("Content-Type", "application/json")
 
 	collection = server.database.Collection("users")
 
@@ -98,7 +98,8 @@ func (server *Server) UserLogin(w http.ResponseWriter, r *http.Request) {
 	userField, _ := userMap["user"].(model.User)
 
 	fmt.Println("User Logged in is ", userField.ID)
-	jwtkey, err := createJWT(userField.ID.Hex())
+	userId := userField.ID.Hex()
+	jwtkey, err := createJWT(userId)
 	if err != nil {
 		fmt.Println("Error in createJWT", err)
 	}
@@ -162,6 +163,7 @@ func (server *Server) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
+// services
 func updateUserByID(userId string, user *model.User) error {
 	id, _ := primitive.ObjectIDFromHex(userId)
 	filter := bson.D{{Key: "_id", Value: id}}
@@ -214,6 +216,7 @@ func insertOneUser(user model.User) string {
 }
 
 func createJWT(id string) (string, error) {
+	fmt.Println("Setting  up JWT", id)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256,
 		jwt.MapClaims{
 			"user_id": id,
@@ -221,6 +224,7 @@ func createJWT(id string) (string, error) {
 		})
 
 	tokenString, err := token.SignedString(secretKey)
+	fmt.Println("Token string ", tokenString)
 	if err != nil {
 		return "", err
 	}
@@ -252,18 +256,22 @@ func verifyToken(tokenString string) (string, error) {
 }
 
 func setCookie(w *http.ResponseWriter, token string) {
-	fmt.Println("Setting cookies")
+	fmt.Println("Setting cookies", token)
 	cookie := http.Cookie{
 		Name:     "user_token",
 		Value:    token,
 		HttpOnly: true, // Set the cookie as HTTP-only for security purpose
 		Expires:  time.Now().Add(24 * time.Hour),
+		Path:     "/",
+		Domain:   "localhost:3000",
+		// Secure:   true, // Set to true when using HTTPS
 	}
 	http.SetCookie(*w, &cookie)
 }
 
 func readCookie(r *http.Request) (string, error) {
 	cookie, err := r.Cookie("user_token")
+	fmt.Println("Reading cookies ", cookie)
 	if err != nil {
 		return "", err
 	}
