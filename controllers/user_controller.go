@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"online_food_ordering/consts"
 	"online_food_ordering/model"
 	"os"
 	"time"
@@ -59,9 +60,7 @@ func (server *Server) initUserCollection() {
 }
 
 func (server *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
-	// w.Header().Set("Content-Type", "application/x-www-form-urlencode")
 	fmt.Println("Create user route called")
-	// w.Header().Set("Content-Type", "application/json")
 
 	collection = server.database.Collection("users")
 
@@ -70,15 +69,14 @@ func (server *Server) CreateUser(w http.ResponseWriter, r *http.Request) {
 	err := user.Validate()
 
 	if err != nil {
-		errorResponse := map[string]string{"error": err.Error()}
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(errorResponse)
+		consts.SendErrorResponse(&w, http.StatusBadRequest, consts.ErrorRequiredFieldMissing, err)
 	} else {
 		userId := insertOneUser(user)
 		jwtkey, err := createJWT(userId)
 		fmt.Println("User Id after creation ", userId)
 		if err != nil {
-			fmt.Println("Error in createJWT", err)
+			consts.SendErrorResponse(&w, http.StatusInternalServerError, consts.ErrorCreatingJWTToken, err)
+			return
 		}
 		setCookie(&w, jwtkey)
 		fmt.Println("key is ", jwtkey)
@@ -93,7 +91,11 @@ func (server *Server) UserLogin(w http.ResponseWriter, r *http.Request) {
 	var user LoginUser
 	collection = server.database.Collection("users")
 	_ = json.NewDecoder(r.Body).Decode(&user)
-	loggedInUser, err := checkLoginUser(&user)
+	loggedInUser, loginErr := checkLoginUser(&user)
+	if loginErr != nil {
+		consts.SendErrorResponse(&w, http.StatusNotFound, consts.ErrorUserNotFound, loginErr)
+		return
+	}
 	userMap, _ := loggedInUser.(map[string]interface{})
 	userField, _ := userMap["user"].(model.User)
 
@@ -199,7 +201,7 @@ func checkLoginUser(user *LoginUser) (interface{}, error) {
 	err := collection.FindOne(context.Background(), filter).Decode(&loggedInUser)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return map[string]interface{}{"message": "no user found"}, ErrUserNotFound
+			return map[string]interface{}{"message": "no user found"}, err
 		}
 	}
 	return map[string]interface{}{"user": loggedInUser}, nil
@@ -208,7 +210,7 @@ func insertOneUser(user model.User) string {
 	fmt.Println("User collection created")
 	inserted, err := collection.InsertOne(context.Background(), user)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println("Error while creating user ", err.Error())
 	}
 
 	fmt.Println("One user inserted ID ", inserted.InsertedID)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"online_food_ordering/consts"
 	"online_food_ordering/model"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -16,23 +17,53 @@ import (
 var ErrOrderNotFound = errors.New("Order not found")
 
 func (server *Server) CreateOrder(w http.ResponseWriter, r *http.Request) {
-	// server.enableCORS(&w)
 	fmt.Println("Create order route called")
-	collection = server.database.Collection("orders")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	w.Header().Set("Allow-Control-Allow-Methods", "POST")
-	w.Header().Set("Content-Type", "application/x-www-form-urlencode")
 
-	var order model.Order
-	_ = json.NewDecoder(r.Body).Decode(&order)
-	err := order.Validate()
+	session, _ := server.client.StartSession()
+	defer session.EndSession(context.Background())
+	collection = server.database.Collection("carts")
+
+	err := mongo.WithSession(context.Background(), session, func(sessionContext mongo.SessionContext) error {
+		err := session.StartTransaction()
+		if err != nil {
+			consts.SendErrorResponse(&w, http.StatusInternalServerError, consts.InternalServerError, err)
+			session.AbortTransaction(sessionContext)
+			return err
+		}
+		var order model.Order
+		_ = json.NewDecoder(r.Body).Decode(&order)
+		filter := bson.D{{"_id", order.CartId}}
+		update := bson.D{{"$set", bson.D{{"isCartActive", false}}}}
+		result, cartUpdateErr := collection.UpdateOne(sessionContext, filter, update)
+		if cartUpdateErr != nil {
+			consts.SendErrorResponse(&w, http.StatusBadRequest, consts.ErrorUpdatingCart, err)
+			session.AbortTransaction(sessionContext)
+			return err
+		}
+		fmt.Println("Updated cart ", result)
+		validationErr := order.Validate()
+		if validationErr != nil {
+			consts.SendErrorResponse(&w, http.StatusBadRequest, consts.ErrorRequiredFieldMissing, err)
+			session.AbortTransaction(sessionContext)
+			return err
+		} else {
+			collection = server.database.Collection("orders")
+			inserted, err := collection.InsertOne(sessionContext, order)
+			if err != nil {
+				log.Fatal(err)
+			}
+			commitErr := session.CommitTransaction(sessionContext)
+			if commitErr != nil {
+				log.Panic("Error while commiting transaction")
+			}
+			fmt.Println("One order inserted ID ", inserted.InsertedID)
+			json.NewEncoder(w).Encode(order)
+		}
+		return nil
+	})
+
 	if err != nil {
-		errorResponse := map[string]string{"error": err.Error()}
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(errorResponse)
-	} else {
-		insertOrder(order)
-		json.NewEncoder(w).Encode(order)
+		log.Panic("Error while creating order")
 	}
 }
 
@@ -77,13 +108,4 @@ func fetchAllOrders(orders *[]model.Order) error {
 		*orders = append(*orders, order)
 	}
 	return nil
-}
-
-func insertOrder(order model.Order) {
-	fmt.Println("Order collection created")
-	inserted, err := collection.InsertOne(context.Background(), order)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("One movie inserted ID ", inserted.InsertedID)
 }

@@ -55,8 +55,6 @@ func (server *Server) CreateCart(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (server *Server) DeactivateCart(w http.ResponseWriter, r *http.Request) {
-	// server.enableCORS(&w)
-	// vars := mux.Vars(r)
 	collection = server.database.Collection("carts")
 	id, er := getUserIdFromToken(r)
 	if er != nil {

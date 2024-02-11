@@ -15,6 +15,7 @@ import (
 type Server struct {
 	Router   *mux.Router
 	database *mongo.Database
+	client   *mongo.Client
 }
 
 var connectionString string
@@ -40,6 +41,7 @@ func (server *Server) Init() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	server.client = client
 	fmt.Println("MongoDB Connection successed")
 
 	server.database = client.Database(dbName)
